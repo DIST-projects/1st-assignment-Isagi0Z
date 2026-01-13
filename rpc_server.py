@@ -3,9 +3,8 @@ import os
 
 PORT = int(os.environ.get("PORT", 8000))
 
-# Allow only /RPC2 path
 class RequestHandler(SimpleXMLRPCRequestHandler):
-    rpc_paths = ('/RPC2',)
+    rpc_paths = ('/', '/RPC2')   # 🔥 allow both
 
 server = SimpleXMLRPCServer(
     ("0.0.0.0", PORT),
@@ -14,3 +13,30 @@ server = SimpleXMLRPCServer(
 )
 
 print("🚀 RPC Server running...")
+
+def calculate_fare(distance_km, time_minutes, surge):
+    base_fare = 50
+    per_km = 12
+    per_min = 2
+    return round((base_fare + distance_km * per_km + time_minutes * per_min) * surge, 2)
+
+def assign_driver(pickup_location):
+    drivers = ["Ravi", "Karthik", "Suresh", "Arun"]
+    return drivers[hash(pickup_location) % len(drivers)]
+
+def estimate_eta(distance_km):
+    return round((distance_km / 40) * 60, 1)
+
+def trip_summary(distance, time, surge, location):
+    return {
+        "fare": calculate_fare(distance, time, surge),
+        "driver": assign_driver(location),
+        "eta": estimate_eta(distance)
+    }
+
+server.register_function(calculate_fare)
+server.register_function(assign_driver)
+server.register_function(estimate_eta)
+server.register_function(trip_summary)
+
+server.serve_forever()
