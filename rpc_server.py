@@ -1,50 +1,40 @@
-from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from flask import Flask, request, Response
+from xmlrpc.server import SimpleXMLRPCDispatcher
 import os
 
-PORT = int(os.environ.get("PORT", 8000))
+app = Flask(__name__)
 
-# Allow BOTH root path and /RPC2 (IMPORTANT for Render)
-class RequestHandler(SimpleXMLRPCRequestHandler):
-    rpc_paths = ('/', '/RPC2')
+dispatcher = SimpleXMLRPCDispatcher(allow_none=True, encoding=None)
 
-server = SimpleXMLRPCServer(
-    ("0.0.0.0", PORT),
-    requestHandler=RequestHandler,
-    allow_none=True
-)
-
-print("🚀 RPC Server running on Render...")
-
+# ---------- RPC METHODS ----------
 def calculate_fare(distance_km, time_minutes, surge):
-    if distance_km <= 0 or time_minutes <= 0:
-        return "Error: Invalid distance or time"
-
     base_fare = 50
     per_km = 12
     per_min = 2
+    return round((base_fare + distance_km*per_km + time_minutes*per_min) * surge, 2)
 
-    fare = (base_fare + (distance_km * per_km) + (time_minutes * per_min)) * surge
-    return round(fare, 2)
-
-def assign_driver(pickup_location):
+def assign_driver(location):
     drivers = ["Ravi", "Karthik", "Suresh", "Arun"]
-    return drivers[hash(pickup_location) % len(drivers)]
+    return drivers[hash(location) % len(drivers)]
 
 def estimate_eta(distance_km):
-    avg_speed = 40
-    eta = (distance_km / avg_speed) * 60
-    return round(eta, 1)
+    return round((distance_km / 40) * 60, 1)
 
-def trip_summary(distance, time, surge, location):
-    return {
-        "fare": calculate_fare(distance, time, surge),
-        "driver": assign_driver(location),
-        "eta": estimate_eta(distance)
-    }
+dispatcher.register_function(calculate_fare)
+dispatcher.register_function(assign_driver)
+dispatcher.register_function(estimate_eta)
 
-server.register_function(calculate_fare)
-server.register_function(assign_driver)
-server.register_function(estimate_eta)
-server.register_function(trip_summary)
+# ---------- HTTP → RPC BRIDGE ----------
+@app.route("/RPC2", methods=["POST"])
+def rpc_handler():
+    response = dispatcher._marshaled_dispatch(request.data)
+    return Response(response, content_type="text/xml")
 
-server.serve_forever()
+@app.route("/")
+def home():
+    return "RPC Server is running"
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
+
